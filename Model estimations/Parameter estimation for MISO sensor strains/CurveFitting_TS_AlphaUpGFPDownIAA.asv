@@ -1,0 +1,80 @@
+clear all
+close all
+clc
+
+%Code to estimate ODE parameters for MISO strain
+load('AlphaUpGFPDownIAAFull')
+
+nopar=16; %Number of parameters
+
+%Then we start the optimization program
+Rep=10; %Number of different initial conditions for parameter estimation
+Err0=10000*sum(sum(Data));
+cont=1;
+for i=1:Rep
+    i
+    try
+        par=parff.*(1+rand(size(parff)).*sign(rand(size(parff))-0.5));
+%         if mod(i,2)==0
+%             par=parff.*(1+rand(size(parff)));
+%             par(6)=ub(6)*(1+rand*0.1);
+%             par(8)=ub(8)*(1+rand*0.1);
+%         else    
+%             par(1:4)=10^(-4-round(rand*5))*rand(4,1);%Initial guess for the parameters
+%             par(5:nopar)=rand(nopar-4,1);
+%             par(6)=ub(6)*rand;
+%             par(8)=ub(8)*rand;
+%         end
+%         par=rand(nopar,1);
+%         par(1:4)=1e-4*rand(4,1);
+%         par(6)=ub(6)*rand;
+%         par(10)=ub(10)*rand;
+%         par(7)=1e5*rand;
+%         par(11)=1e5*rand;
+%         par(8)=1e5*rand;
+%         par(15)=1e5*rand;
+%         par(12)=1e5*rand;
+%         par(9)=1e5*rand;
+        %Optimization and cost function
+        options=optimoptions('fmincon','TolFun',1e-8,'TolCon',1e-8,'MaxIter',3000);
+        %[parF(cont,:),Err(cont)]=fmincon(@CostFunAlphaUpGFPDownIAA,par,A,b,Aeq,beq,lb,ub,[],options);
+        [parF(cont,:),Err(cont)]=fminsearch(@CostFunAlphaUpGFPDownIAA,sqrt(par));
+        if Err(i)<Err0 %If we find a new minimum of the cost function
+            Err0=Err(cont);
+            parf=parF(cont,:);
+        end      
+        cont=cont+1;
+    catch
+    end
+end
+
+parf=parf.^2;
+
+TS=1000;
+figure
+[~,yODE1]=ode15s(@ActiveAlphaUpGFPDownIAA,[0 TS],zeros(5,1),odeset('refine',10),0,0,parf); %Simulating the system for different input
+for j=1:length(Input)
+    [t,yODE]=ode15s(@ActiveAlphaUpGFPDownIAA,[Time(1) Time(end)],yODE1(end,:),odeset('refine',10),Input(j,1),Input(j,2),parf);
+    yEnd=yODE(:,end);
+    %Y=binlin(t,yEnd,Time);
+    plot(Time,Data(:,j),'MarkerSize',8,'Marker','diamond','LineWidth',2,'LineStyle','none','DisplayName','Data')
+    hold on
+    plot(t,yEnd,'LineWidth',2,'DisplayName','Simulation')
+end 
+
+% figure
+% load('IFFLdata.mat')
+% for k=1:length(Ratio)
+%     [~,yODE1N]=ode15s(@ActiveIFFLAlphaUpGFPDownIAA,[0 TS],zeros(7,1),odeset('refine',10),0,Ratio(k),parf); %Simulating the system for different input
+%     for j=1:length(Input)
+%         [t,yODE2]=ode15s(@ActiveIFFLAlphaUpGFPDownIAA,[0 Time],[yODE1N(end,1:2) 0 yODE1(end,:)],odeset('refine',10),Input(j),Ratio(k),parf); %Simulating the system for different input
+%         yEnd2(k,j)=yODE2(end,end);
+%     end
+%     plot(Input,yEnd2(k,:))
+%     hold on
+%     plot(Input,Data(:,k))
+% end
+
+
+filename='ParameterEvalAlphaUpGFPDownIAAFull2';
+save(filename,'parf','parF','Err')
